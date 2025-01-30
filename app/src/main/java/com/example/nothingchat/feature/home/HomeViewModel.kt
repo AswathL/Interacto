@@ -52,9 +52,14 @@ class HomeViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    fun addChannel(name: String, password: String?) {
+    fun addChannel(name: String, password: String?, isAIChannel: Boolean) {
         val channelRef = firebaseDatabase.getReference("channel").push()
         val channelData = mutableMapOf<String, Any>("name" to name)
+
+        // Add the AI channel flag
+        channelData["isAIChannel"] = isAIChannel
+
+        // If password is provided, add it
         if (!password.isNullOrEmpty()) {
             channelData["password"] = password
         }
@@ -63,6 +68,26 @@ class HomeViewModel @Inject constructor() : ViewModel() {
             getChannels()
         }
     }
+
+    fun addAIChannel(name: String, password: String?) {
+        val channelRef = firebaseDatabase.getReference("channel").push()
+
+        // Use a mutable map to allow modifications
+        val channelData = mutableMapOf<String, Any>(
+            "name" to name,
+            "isAIChannel" to true // Mark this channel as an AI channel
+        )
+
+        if (!password.isNullOrEmpty()) {
+            channelData["password"] = password
+        }
+
+        channelRef.setValue(channelData).addOnSuccessListener {
+            getChannels()
+        }
+    }
+
+
 
     fun toggleFavorite(channelId: String, isFavorite: Boolean) {
         val favoriteRef = firebaseDatabase.getReference("favorites/$userId/$channelId")
@@ -92,4 +117,6 @@ class HomeViewModel @Inject constructor() : ViewModel() {
     fun getChannelLink(channelId: String): String {
         return "app://channel/$channelId"
     }
+
+
 }

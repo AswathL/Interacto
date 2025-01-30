@@ -37,16 +37,18 @@ fun MainApp(modifier: Modifier = Modifier){
                 HomeScreen(navController)
             }
             composable(
-                route = "chat/{channelID}/{channelName}",
+                route = "chat/{channelID}/{channelName}/{isAIChannel}",
                 arguments = listOf(
                     navArgument("channelID") { type = NavType.StringType },
-                    navArgument("channelName") { type = NavType.StringType }
+                    navArgument("channelName") { type = NavType.StringType },
+                    navArgument("isAIChannel") { type = NavType.BoolType }
                 )
             ) { backStackEntry ->
                 val channelID = backStackEntry.arguments?.getString("channelID") ?: ""
                 val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+                val isAIChannel = backStackEntry.arguments?.getBoolean("isAIChannel") ?: true
 
-                ChatScreen(navController = navController,channelID,channelName)
+                ChatScreen(navController = navController,channelID,channelName,isAIChannel)
             }
             composable("signout") {
                 SignOutScreen(navController)

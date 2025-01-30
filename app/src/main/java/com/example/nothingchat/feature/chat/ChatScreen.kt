@@ -96,7 +96,7 @@ private val supabaseClient = createSupabaseClient(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(navController: NavController, channelId: String, channelName: String) {
+fun ChatScreen(navController: NavController, channelId: String, channelName: String,isAIChannel: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val channelId = channelId.removeSurrounding("{", "}")
@@ -166,7 +166,7 @@ fun ChatScreen(navController: NavController, channelId: String, channelName: Str
         ) {
             val viewModel = hiltViewModel<ChatViewModel>()
             LaunchedEffect(key1 = channelId) {
-                viewModel.ListenForMessages(channelId)
+                viewModel.listenForMessages(channelId)
             }
             val messages = viewModel.message.collectAsState()
             ChatMessages(

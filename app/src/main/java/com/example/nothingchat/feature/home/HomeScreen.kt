@@ -30,34 +30,49 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.nothingchat.R
 import com.example.nothingchat.model.Channel
-
 @Composable
 fun HomeScreen(navController: NavController) {
     val viewModel = hiltViewModel<HomeViewModel>()
     val channelsState = viewModel.channels.collectAsState()
     val searchQuery = remember { mutableStateOf("") }
     val showAddChannelSheet = remember { mutableStateOf(false) }
+    val showAddAIChannelSheet = remember { mutableStateOf(false) }
     val joinChannelDialogChannelId = remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    // Filter channels based on the search query
-    val filteredChannels = channelsState.value.filter {
-        it.name.contains(searchQuery.value, ignoreCase = true)
-    }
+    // State for the selected tab
+    val selectedTab = remember { mutableStateOf(ChannelTab.PINNED) }
+
+    // Filter channels based on the search query and selected tab
+    val filteredChannels = when (selectedTab.value) {
+        ChannelTab.PINNED -> channelsState.value.filter { it.isFavorite }
+        ChannelTab.ALL -> channelsState.value
+        ChannelTab.AI -> channelsState.value.filter { it.isAIChannel }
+        ChannelTab.ALL_WITH_PINNED -> {
+            val pinnedChannels = channelsState.value.filter { it.isFavorite }
+            val otherChannels = channelsState.value.filterNot { it.isFavorite }
+            pinnedChannels + otherChannels
+        }
+    }.filter { it.name.contains(searchQuery.value, ignoreCase = true) }
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddChannelSheet.value = true },
-                containerColor = Color.Red,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(16.dp))
-            ) {
-                Text( text = context.getString(R.string.Add_Channel),
-                    modifier = Modifier.padding(16.dp),
-                    color = Color.White,
-                    style = TextStyle(fontWeight = FontWeight.Bold))
+            Column {
+                // Button to add a regular channel
+                FloatingActionButton(
+                    onClick = { showAddChannelSheet.value = true },
+                    containerColor = Color.Red,
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                ) {
+                    Text(
+                        text = context.getString(R.string.Add_Channel),
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.White,
+                        style = TextStyle(fontWeight = FontWeight.Bold)
+                    )
+                }
             }
         }
     ) { paddingValues ->
@@ -65,29 +80,65 @@ fun HomeScreen(navController: NavController) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Header(navController)
                 SearchBar(searchQuery)
-                ChannelList(
-                    channels = filteredChannels,
-                    onChannelClick = { channel ->
-                        if (channel.hasPassword) {
-                            joinChannelDialogChannelId.value = channel.id
-                        } else {
-                            navController.navigate("chat/${channel.id}/${channel.name}")
+
+                // Tab bar for channel views
+                ChannelTabBar(selectedTab = selectedTab.value, onTabSelected = { selectedTab.value = it })
+
+                if (filteredChannels.isEmpty() && selectedTab.value == ChannelTab.PINNED) {
+                    // Show a message if no channels are pinned
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "No pinned channels",
+                                style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Navigate to 'All Channels' to pin your favorites",
+                                style = TextStyle(fontSize = 14.sp, color = Color.Gray)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { selectedTab.value = ChannelTab.ALL },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) {
+                                Text(text = "Go to All Channels", color = Color.White)
+                            }
                         }
-                    },
-                    onFavoriteToggle = { channelId, isFavorite ->
-                        viewModel.toggleFavorite(channelId, isFavorite)
-                    },
-                    context = LocalContext.current
-                )
+                    }
+                } else {
+                    // Show the list of channels
+                    ChannelList(
+                        channels = filteredChannels,
+                        onChannelClick = { channel ->
+                            if (channel.hasPassword) {
+                                joinChannelDialogChannelId.value = channel.id
+                            } else {
+                                navController.navigate("chat/${channel.id}/${channel.name}/${channel.isAIChannel}")
+                            }
+                        },
+                        onFavoriteToggle = { channelId, isFavorite ->
+                            viewModel.toggleFavorite(channelId, isFavorite)
+                        },
+                        context = context
+                    )
+                }
             }
         }
 
         if (showAddChannelSheet.value) {
-
             AddChannelModalBottomSheet(
                 showAddChannelSheet = showAddChannelSheet,
-                onAddChannel = { channelName, channelPassword ->
-                    viewModel.addChannel(channelName, channelPassword)
+                onAddChannel = { channelName, channelPassword, isAIChannel ->
+                    viewModel.addChannel(channelName, channelPassword, isAIChannel)
                 }
             )
         }
@@ -99,13 +150,59 @@ fun HomeScreen(navController: NavController) {
                 onDismiss = { joinChannelDialogChannelId.value = null },
                 onSuccess = {
                     joinChannelDialogChannelId.value = null
-                    navController.navigate("chat/$channelId/${filteredChannels.find { it.id == channelId }?.name}")
+                    navController.navigate("chat/$channelId/${filteredChannels.find { it.id == channelId }?.name}/${filteredChannels.find { it.id == channelId }?.isAIChannel}")
                 }
             )
         }
     }
 }
 
+// Enum for channel tabs
+enum class ChannelTab {
+    PINNED, ALL, AI, ALL_WITH_PINNED
+}
+
+// Composable for the tab bar
+@Composable
+fun ChannelTabBar(selectedTab: ChannelTab, onTabSelected: (ChannelTab) -> Unit) {
+    val tabs = listOf(ChannelTab.PINNED, ChannelTab.ALL, ChannelTab.AI, ChannelTab.ALL_WITH_PINNED)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        tabs.forEach { tab ->
+            val isSelected = tab == selectedTab
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (isSelected) Color.Red // Selected tab color
+                        else MaterialTheme.colorScheme.surfaceVariant // Unselected tab color (card-like)
+                    )
+                    .clickable { onTabSelected(tab) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = when (tab) {
+                        ChannelTab.PINNED -> "Pinned"
+                        ChannelTab.ALL -> "All"
+                        ChannelTab.AI -> "AI"
+                        ChannelTab.ALL_WITH_PINNED -> "All with Pinned"
+                    },
+                    color = if (isSelected) Color.White // Text color for selected tab
+                    else MaterialTheme.colorScheme.onSurfaceVariant, // Text color for unselected tab
+                    style = TextStyle(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 14.sp
+                    )
+                )
+            }
+        }
+    }
+}
 @Composable
 fun Header(navController: NavController) {
     val context = LocalContext.current
@@ -194,7 +291,7 @@ fun ChannelList(
 @Composable
 fun AddChannelModalBottomSheet(
     showAddChannelSheet: MutableState<Boolean>,
-    onAddChannel: (String, String) -> Unit
+    onAddChannel: (String, String, Boolean) -> Unit // Now accepts AI Channel flag
 ) {
     val context = LocalContext.current
     if (showAddChannelSheet.value) {
@@ -204,6 +301,7 @@ fun AddChannelModalBottomSheet(
         ) {
             val channelName = remember { mutableStateOf("") }
             val channelPassword = remember { mutableStateOf("") }
+            val isAIChannel = remember { mutableStateOf(false) } // State for the AI Channel checkbox
 
             Column(
                 modifier = Modifier
@@ -247,12 +345,23 @@ fun AddChannelModalBottomSheet(
                     )
                 )
 
+                // Checkbox for AI Channel
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = isAIChannel.value,
+                        onCheckedChange = { isAIChannel.value = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Create as Interacto Intelligence Channel (AI)")
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-
-
                     Button(
                         onClick = { showAddChannelSheet.value = false },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
@@ -262,7 +371,8 @@ fun AddChannelModalBottomSheet(
                     Button(
                         onClick = {
                             if (channelName.value.isNotBlank()) {
-                                onAddChannel(channelName.value, channelPassword.value)
+                                // Pass the channel name, password, and AI flag
+                                onAddChannel(channelName.value, channelPassword.value, isAIChannel.value)
                                 showAddChannelSheet.value = false
                             }
                         },

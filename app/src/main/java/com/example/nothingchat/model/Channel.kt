@@ -5,5 +5,6 @@ data class Channel (
     val name: String,
     val isFavorite: Boolean = false,
     val createdAty: Long = System.currentTimeMillis(),
-    val hasPassword: Boolean = false
+    val hasPassword: Boolean = false,
+    val isAIChannel: Boolean = false
 )

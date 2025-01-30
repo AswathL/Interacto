@@ -110,6 +110,8 @@ dependencies {
     implementation("software.amazon.awssdk:url-connection-client:2.25.14")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
 
 
 
